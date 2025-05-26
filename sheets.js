@@ -1,7 +1,9 @@
 const { google } = require('googleapis');
 
+const keyData = JSON.parse(Buffer.from(process.env.GOOGLE_KEY_BASE64, 'base64').toString('utf-8'));
+
 const auth = new google.auth.GoogleAuth({
-  keyFile: 'services/service-account.json',
+  credentials: keyData,
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 
