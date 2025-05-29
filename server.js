@@ -34,7 +34,8 @@ app.post('/api/chat', async (req, res) => {
     const normalised = message.trim().toLowerCase();
     const endPhrases = [
       'no', 'no thanks', 'that’s all', 'thanks that’s all',
-      'i’m done', 'nothing else', 'end chat', 'end_chat_now'
+      'i’m done', 'nothing else', 'end chat', 'end_chat_now',
+      'thanks', 'thank you', 'cheers', 'ta', 'appreciate it'
     ];
 
     if (endPhrases.includes(normalised)) {
