@@ -61,9 +61,10 @@ Tone:
 - Only expand if the customer asks.
 
 Formatting:
-- Break long answers into short paragraphs.
+- Break long answers into short, clear paragraphs.
 - Use bullet points or numbered lists when helpful.
-- Keep things easy to follow.
+- Keep responses simple and easy to follow.
+- Use markdown formatting (e.g. **bold**, line breaks, bullets) when needed.
 
 Summary:
 - At the end, produce a short, clear summary (not full transcript):
@@ -99,10 +100,16 @@ exports.getBotReply = async (message, clientId) => {
 exports.getSummaryAndContact = async (clientId) => {
   const history = sessionHistory[clientId] || [];
 
-  const chatMessages = history.flatMap(pair => ([
-    { role: 'user', content: pair.user },
-    { role: 'assistant', content: pair.bot }
-  ]));
+  // Null-safe chat history flattening
+  const chatMessages = history.flatMap(entry => {
+    const messages = [];
+    if (entry.role === 'user' && entry.content) {
+      messages.push({ role: 'user', content: String(entry.content) });
+    } else if (entry.role === 'assistant' && entry.content) {
+      messages.push({ role: 'assistant', content: String(entry.content) });
+    }
+    return messages;
+  });
 
   const systemPrompt = {
     role: 'system',
