@@ -38,16 +38,22 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
+// ✅ Updated manual end button logic using a message trigger
 endButton.addEventListener('click', async () => {
   try {
-    await fetch('https://allansbot.onrender.com/api/end-chat', {
+    const res = await fetch('https://allansbot.onrender.com/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId: 'cairns-poolpros' })
+      body: JSON.stringify({
+        message: 'end_chat_now',
+        clientId: 'cairns-poolpros'
+      })
     });
-    appendMessage('Allan', 'No worries! I’ve sent your details to our team. They’ll be in touch shortly.');
+
+    const data = await res.json();
+    appendMessage('Allan', data.reply || 'Your details have been passed to our team. Thanks!');
   } catch (err) {
-    console.error('Error ending chat:', err);
+    console.error('Error ending chat manually:', err);
     appendMessage('Allan', 'Oops! Something went wrong when finishing the chat.');
   }
 });

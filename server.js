@@ -22,7 +22,6 @@ app.get('/', (req, res) => {
 const sessionHistory = {};
 const sessionTimeouts = {};
 
-// Main chat route
 app.post('/api/chat', async (req, res) => {
   const { message, clientId } = req.body;
 
@@ -33,9 +32,12 @@ app.post('/api/chat', async (req, res) => {
     if (!sessionHistory[clientId]) sessionHistory[clientId] = [];
     sessionHistory[clientId].push({ user: message, bot: reply });
 
-    // Broadened session-end triggers
+    // Unified session end logic
     const normalised = message.trim().toLowerCase();
-    const endPhrases = ['no', 'no thanks', 'that’s all', 'thanks that’s all', 'i’m done', 'nothing else', 'end chat'];
+    const endPhrases = [
+      'no', 'no thanks', 'that’s all', 'thanks that’s all',
+      'i’m done', 'nothing else', 'end chat', 'end_chat_now'
+    ];
 
     if (endPhrases.includes(normalised)) {
       await handleSessionEnd(clientId);
@@ -47,19 +49,6 @@ app.post('/api/chat', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ reply: 'Oops! Something went wrong.' });
-  }
-});
-
-// ✅ NEW manual trigger to end chat
-app.post('/api/end-chat', async (req, res) => {
-  const { clientId } = req.body;
-
-  try {
-    await handleSessionEnd(clientId);
-    res.sendStatus(200);
-  } catch (err) {
-    console.error('Error manually ending session:', err);
-    res.status(500).send('Failed to end session.');
   }
 });
 
