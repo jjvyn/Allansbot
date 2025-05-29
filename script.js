@@ -24,30 +24,57 @@ form.addEventListener('submit', async (e) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: userMessage,
-        clientId: 'cairns-poolpros' // change this for each client
+        clientId: 'cairns-poolpros'
       })
     });
 
     const data = await res.json();
     document.querySelectorAll('#chat-body .bot:last-child').forEach(el => el.remove());
-    appendMessage('Allan', data.reply || "Sorry, something went wrong.");
+    appendMessage('Allan', formatBotText(data.reply || "Sorry, something went wrong."));
   } catch (err) {
     console.error(err);
-    appendMessage('Allan', "Error reaching the server.");
+    document.querySelectorAll('#chat-body .bot:last-child').forEach(el => el.remove());
+    appendMessage('Allan', "Oops! Something went wrong. Please try again.");
   }
 });
 
-function appendMessage(sender, text) {
+function appendMessage(sender, htmlContent) {
   const msg = document.createElement('div');
   msg.classList.add(sender === 'You' ? 'user' : 'bot');
 
-  // Add line break above Allan’s messages, and bold sender names
-  if (sender === 'Allan') {
-    msg.innerHTML = `<br><strong>${sender}:</strong> ${text}`;
-  } else {
-    msg.innerHTML = `<strong>${sender}:</strong> ${text}`;
-  }
+  msg.innerHTML = sender === 'Allan'
+    ? `<br><strong>${sender}:</strong>${htmlContent}`
+    : `<strong>${sender}:</strong> ${htmlContent}`;
 
   body.appendChild(msg);
   body.scrollTop = body.scrollHeight;
+}
+
+function formatBotText(text) {
+  const lines = text.split('\n').filter(line => line.trim() !== '');
+  let formatted = '';
+  let inList = false;
+
+  lines.forEach(line => {
+    const trimmed = line.trim();
+
+    if (/^(-|\*|\d+\.)\s+/.test(trimmed)) {
+      // Start or continue a list
+      if (!inList) {
+        formatted += '<ul>';
+        inList = true;
+      }
+      formatted += `<li>${trimmed.replace(/^(-|\*|\d+\.)\s+/, '')}</li>`;
+    } else {
+      // If previously in a list, close it
+      if (inList) {
+        formatted += '</ul>';
+        inList = false;
+      }
+      formatted += `<p>${trimmed}</p>`;
+    }
+  });
+
+  if (inList) formatted += '</ul>';
+  return formatted;
 }
