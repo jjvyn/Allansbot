@@ -19,6 +19,25 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// ✅ TEST ROUTE FOR EMAIL FUNCTION
+app.get('/test-email', async (req, res) => {
+  try {
+    await sendLeadEmail({
+      name: "Test User",
+      email: "test@example.com",
+      phone: "123456789",
+      address: "123 Demo Street, Cairns QLD",
+      accessInfo: "No locked gates",
+      summary: "This is a test email sent from the /test-email route."
+    });
+    console.log("✅ Test email sent successfully.");
+    res.send("✅ Test email sent successfully.");
+  } catch (err) {
+    console.error("❌ Failed to send test email:", err);
+    res.status(500).send("❌ Failed to send test email.");
+  }
+});
+
 const sessionHistory = {};
 const sessionTimeouts = {};
 
