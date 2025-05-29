@@ -25,20 +25,21 @@ form.addEventListener('submit', async (e) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: userMessage,
-        clientId: 'cairns-poolpros' // change this for each client
+        clientId: 'cairns-poolpros'
       })
     });
 
     const data = await res.json();
     document.querySelectorAll('#chat-body .bot:last-child').forEach(el => el.remove());
-    appendMessage('Allan', data.reply || "Sorry, something went wrong.");
+
+    const trimmed = trimIfTooLong(data.reply);
+    appendMessage('Allan', trimmed || "Sorry, something went wrong.");
   } catch (err) {
     console.error(err);
     appendMessage('Allan', "Error reaching the server.");
   }
 });
 
-// ✅ Updated manual end button logic using a message trigger
 endButton.addEventListener('click', async () => {
   try {
     const res = await fetch('https://allansbot.onrender.com/api/chat', {
@@ -58,16 +59,37 @@ endButton.addEventListener('click', async () => {
   }
 });
 
+// ✅ Updated formatter for Allan's responses
 function appendMessage(sender, text) {
   const msg = document.createElement('div');
   msg.classList.add(sender === 'You' ? 'user' : 'bot');
 
   if (sender === 'Allan') {
-    msg.innerHTML = `<br><strong>${sender}:</strong> ${text}`;
+    const formattedText = text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')         // bold
+      .replace(/^- (.*)$/gm, '<li>• $1</li>')                   // bullet list
+      .replace(/^\d+\.\s(.*)$/gm, '<li>$1</li>')                // numbered list
+      .replace(/\n{2,}/g, '</p><p>')                            // paragraph breaks
+      .replace(/\n/g, '<br>')                                   // line breaks
+      .replace(/<li>/, '<ul><li>')                              // open list
+      .replace(/<\/li>(?!<li>)/g, '</li></ul>');                // close list
+
+    msg.innerHTML = `<br><strong>${sender}:</strong><p>${formattedText}</p>`;
   } else {
     msg.innerHTML = `<strong>${sender}:</strong> ${text}`;
   }
 
   body.appendChild(msg);
   body.scrollTop = body.scrollHeight;
+}
+
+// ✅ Trim long replies unless important
+function trimIfTooLong(text) {
+  const maxSentences = 3;
+  const mustKeep = ['address', 'email', 'technician', 'book', 'sample'];
+
+  if (mustKeep.some(word => text.toLowerCase().includes(word))) return text;
+
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  return sentences.slice(0, maxSentences).join(' ') + (sentences.length > maxSentences ? ' [...]' : '');
 }
