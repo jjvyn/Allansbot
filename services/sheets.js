@@ -1,6 +1,8 @@
 const { google } = require('googleapis');
 
-const keyData = JSON.parse(Buffer.from(process.env.GOOGLE_KEY_BASE64, 'base64').toString('utf-8'));
+const keyData = JSON.parse(
+  Buffer.from(process.env.GOOGLE_KEY_BASE64, 'base64').toString('utf-8')
+);
 
 const auth = new google.auth.GoogleAuth({
   credentials: keyData,
@@ -10,10 +12,17 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets('v4');
 
 exports.logToSheet = async ({ clientId, message, reply }) => {
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+
+  if (!spreadsheetId) {
+    console.error('❌ SPREADSHEET_ID is missing from environment variables');
+    throw new Error('Missing required environment variable: SPREADSHEET_ID');
+  }
+
   const client = await auth.getClient();
   await sheets.spreadsheets.values.append({
     auth: client,
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    spreadsheetId,
     range: 'Leads!A1',
     valueInputOption: 'RAW',
     requestBody: {
