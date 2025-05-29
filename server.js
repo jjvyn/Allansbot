@@ -11,10 +11,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static files (e.g., index.html) from root directory
+// Serve static files
 app.use(express.static(path.join(__dirname, '/')));
-
-// Serve index.html on root path
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -28,11 +26,11 @@ app.post('/api/chat', async (req, res) => {
   try {
     const reply = await getBotReply(message, clientId);
 
-    // Store conversation history
+    // Store message history
     if (!sessionHistory[clientId]) sessionHistory[clientId] = [];
     sessionHistory[clientId].push({ user: message, bot: reply });
 
-    // Unified session end logic
+    // Trigger end if message matches end phrase
     const normalised = message.trim().toLowerCase();
     const endPhrases = [
       'no', 'no thanks', 'that’s all', 'thanks that’s all',
@@ -40,7 +38,8 @@ app.post('/api/chat', async (req, res) => {
     ];
 
     if (endPhrases.includes(normalised)) {
-      await handleSessionEnd(clientId);
+      const confirmation = await handleSessionEnd(clientId);
+      return res.json({ reply: confirmation });
     } else {
       resetSessionTimeout(clientId);
     }
@@ -60,7 +59,7 @@ const resetSessionTimeout = (clientId) => {
   sessionTimeouts[clientId] = setTimeout(async () => {
     console.log(`Session timeout for client ${clientId}`);
     await handleSessionEnd(clientId);
-  }, 2 * 60 * 1000); // 2 minutes
+  }, 2 * 60 * 1000);
 };
 
 const handleSessionEnd = async (clientId) => {
@@ -71,14 +70,16 @@ const handleSessionEnd = async (clientId) => {
 
   try {
     await sendLeadEmail({ name, email, phone, address, accessInfo, summary });
-    await logToSheet({ clientId, message: '[Session Ended]', reply: summary });
-    console.log(`Email and sheet logged for ${clientId}`);
+    await logToSheet({ clientId, name, email, phone, address, accessInfo, summary });
+    console.log(`✅ Session ended for ${clientId}`);
   } catch (err) {
-    console.error(`Failed to send final summary for ${clientId}`, err);
+    console.error(`❌ Failed to complete session for ${clientId}`, err);
   }
 
   delete sessionHistory[clientId];
   delete sessionTimeouts[clientId];
+
+  return 'Thanks! I’ve sent your details to our team. They’ll be in touch shortly. Have a great day!';
 };
 
 const PORT = process.env.PORT || 3000;
