@@ -5,12 +5,16 @@ const input = document.getElementById('chat-input');
 const body = document.getElementById('chat-body');
 const endButton = document.getElementById('end-chat');
 
+let chatEnded = false;
+
 launcher.addEventListener('click', () => {
   widget.classList.toggle('hidden');
 });
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (chatEnded) return;
+
   const userMessage = input.value.trim();
   if (!userMessage) return;
 
@@ -32,8 +36,11 @@ form.addEventListener('submit', async (e) => {
     const data = await res.json();
     document.querySelectorAll('#chat-body .bot:last-child').forEach(el => el.remove());
 
-    const trimmed = trimIfTooLong(data.reply);
-    appendMessage('Allan', trimmed || "Sorry, something went wrong.");
+    appendMessage('Allan', data.reply || "Sorry, something went wrong.");
+
+    if (data.reply?.toLowerCase().includes("have a great day")) {
+      markChatEnded();
+    }
   } catch (err) {
     console.error(err);
     appendMessage('Allan', "Error reaching the server.");
@@ -41,6 +48,8 @@ form.addEventListener('submit', async (e) => {
 });
 
 endButton.addEventListener('click', async () => {
+  if (chatEnded) return;
+
   try {
     const res = await fetch('https://allansbot.onrender.com/api/chat', {
       method: 'POST',
@@ -53,26 +62,34 @@ endButton.addEventListener('click', async () => {
 
     const data = await res.json();
     appendMessage('Allan', data.reply || 'Your details have been passed to our team. Thanks!');
+    markChatEnded();
   } catch (err) {
     console.error('Error ending chat manually:', err);
     appendMessage('Allan', 'Oops! Something went wrong when finishing the chat.');
   }
 });
 
-// ✅ Updated formatter for Allan's responses
+function markChatEnded() {
+  chatEnded = true;
+  input.disabled = true;
+  input.placeholder = "Chat has ended.";
+  form.querySelector('button').disabled = true;
+}
+
+// ✅ Message formatter
 function appendMessage(sender, text) {
   const msg = document.createElement('div');
   msg.classList.add(sender === 'You' ? 'user' : 'bot');
 
   if (sender === 'Allan') {
     const formattedText = text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')         // bold
-      .replace(/^- (.*)$/gm, '<li>• $1</li>')                   // bullet list
-      .replace(/^\d+\.\s(.*)$/gm, '<li>$1</li>')                // numbered list
-      .replace(/\n{2,}/g, '</p><p>')                            // paragraph breaks
-      .replace(/\n/g, '<br>')                                   // line breaks
-      .replace(/<li>/, '<ul><li>')                              // open list
-      .replace(/<\/li>(?!<li>)/g, '</li></ul>');                // close list
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^- (.*)$/gm, '<li>• $1</li>')
+      .replace(/^\d+\.\s(.*)$/gm, '<li>$1</li>')
+      .replace(/\n{2,}/g, '</p><p>')
+      .replace(/\n/g, '<br>')
+      .replace(/<li>/, '<ul><li>')
+      .replace(/<\/li>(?!<li>)/g, '</li></ul>');
 
     msg.innerHTML = `<br><strong>${sender}:</strong><p>${formattedText}</p>`;
   } else {
@@ -83,11 +100,9 @@ function appendMessage(sender, text) {
   body.scrollTop = body.scrollHeight;
 }
 
-// ✅ Trim long replies unless important
 function trimIfTooLong(text) {
   const maxSentences = 3;
   const mustKeep = ['address', 'email', 'technician', 'book', 'sample'];
-
   if (mustKeep.some(word => text.toLowerCase().includes(word))) return text;
 
   const sentences = text.split(/(?<=[.!?])\s+/);
