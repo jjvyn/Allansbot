@@ -11,7 +11,7 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets('v4');
 
-exports.logToSheet = async ({ clientId, message, reply }) => {
+exports.logToSheet = async ({ clientId, name, email, phone, address, accessInfo, summary }) => {
   const spreadsheetId = process.env.SPREADSHEET_ID;
 
   if (!spreadsheetId) {
@@ -20,13 +20,23 @@ exports.logToSheet = async ({ clientId, message, reply }) => {
   }
 
   const client = await auth.getClient();
+
   await sheets.spreadsheets.values.append({
     auth: client,
     spreadsheetId,
     range: 'Leads!A1',
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[new Date().toISOString(), clientId, message, reply]]
+      values: [[
+        new Date().toISOString(),
+        clientId || '',
+        name || '',
+        email || '',
+        phone || '',
+        address || '',
+        accessInfo || '',
+        summary || ''
+      ]]
     }
   });
 };
