@@ -18,10 +18,10 @@ form.addEventListener('submit', async (e) => {
   const userMessage = input.value.trim();
   if (!userMessage) return;
 
-  appendMessage('You', userMessage);
+  addMessage("user", userMessage);
   input.value = '';
 
-  appendMessage('Allan', 'Thinking...');
+  const typingEl = addTypingIndicator();
 
   try {
     const res = await fetch('https://allansbot.onrender.com/api/chat', {
@@ -34,21 +34,25 @@ form.addEventListener('submit', async (e) => {
     });
 
     const data = await res.json();
-    document.querySelectorAll('#chat-body .bot:last-child').forEach(el => el.remove());
+    typingEl.remove();
 
-    appendMessage('Allan', data.reply || "Sorry, something went wrong.");
+    const trimmed = trimIfTooLong(data.reply);
+    addMessage("bot", trimmed || "Sorry, something went wrong.");
 
-    if (data.reply?.toLowerCase().includes("have a great day")) {
-      markChatEnded();
+    if (trimmed?.toLowerCase().includes("our team will be in touch") || trimmed?.toLowerCase().includes("chat has ended")) {
+      disableChat();
     }
   } catch (err) {
+    typingEl.remove();
     console.error(err);
-    appendMessage('Allan', "Error reaching the server.");
+    addMessage("bot", "Error reaching the server.");
   }
 });
 
 endButton.addEventListener('click', async () => {
   if (chatEnded) return;
+
+  const typingEl = addTypingIndicator();
 
   try {
     const res = await fetch('https://allansbot.onrender.com/api/chat', {
@@ -61,28 +65,30 @@ endButton.addEventListener('click', async () => {
     });
 
     const data = await res.json();
-    appendMessage('Allan', data.reply || 'Your details have been passed to our team. Thanks!');
-    markChatEnded();
+    typingEl.remove();
+    addMessage('bot', data.reply || 'Your details have been passed to our team. Thanks!');
+    disableChat();
   } catch (err) {
+    typingEl.remove();
     console.error('Error ending chat manually:', err);
-    appendMessage('Allan', 'Oops! Something went wrong when finishing the chat.');
+    addMessage('bot', 'Oops! Something went wrong when finishing the chat.');
   }
 });
 
-function markChatEnded() {
-  chatEnded = true;
-  input.disabled = true;
-  input.placeholder = "Chat has ended.";
-  form.querySelector('button').disabled = true;
-}
-
-// ✅ Message formatter
-function appendMessage(sender, text) {
+// ✅ Render message with bubble + name
+function addMessage(sender, text) {
   const msg = document.createElement('div');
-  msg.classList.add(sender === 'You' ? 'user' : 'bot');
+  msg.className = `message ${sender}`;
 
-  if (sender === 'Allan') {
-    const formattedText = text
+  const name = document.createElement('div');
+  name.className = 'name-label';
+  name.textContent = sender === 'user' ? 'You' : 'Allan';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+
+  if (sender === 'bot') {
+    const formatted = text
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/^- (.*)$/gm, '<li>• $1</li>')
       .replace(/^\d+\.\s(.*)$/gm, '<li>$1</li>')
@@ -91,20 +97,53 @@ function appendMessage(sender, text) {
       .replace(/<li>/, '<ul><li>')
       .replace(/<\/li>(?!<li>)/g, '</li></ul>');
 
-    msg.innerHTML = `<br><strong>${sender}:</strong><p>${formattedText}</p>`;
+    bubble.innerHTML = `<p>${formatted}</p>`;
   } else {
-    msg.innerHTML = `<strong>${sender}:</strong> ${text}`;
+    bubble.textContent = text;
   }
 
+  msg.appendChild(name);
+  msg.appendChild(bubble);
   body.appendChild(msg);
   body.scrollTop = body.scrollHeight;
 }
 
+// ✅ Typing animation bubble
+function addTypingIndicator() {
+  const msg = document.createElement('div');
+  msg.className = 'message bot';
+
+  const name = document.createElement('div');
+  name.className = 'name-label';
+  name.textContent = 'Allan';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble typing';
+  bubble.innerHTML = '<span></span><span></span><span></span>';
+
+  msg.appendChild(name);
+  msg.appendChild(bubble);
+  body.appendChild(msg);
+  body.scrollTop = body.scrollHeight;
+
+  return msg;
+}
+
+// ✅ Trim long replies unless they contain important words
 function trimIfTooLong(text) {
   const maxSentences = 3;
   const mustKeep = ['address', 'email', 'technician', 'book', 'sample'];
+
   if (mustKeep.some(word => text.toLowerCase().includes(word))) return text;
 
   const sentences = text.split(/(?<=[.!?])\s+/);
   return sentences.slice(0, maxSentences).join(' ') + (sentences.length > maxSentences ? ' [...]' : '');
+}
+
+// ✅ Disable input after ending chat
+function disableChat() {
+  chatEnded = true;
+  input.disabled = true;
+  endButton.disabled = true;
+  addMessage('bot', 'Chat has ended. Our team will be in touch shortly.');
 }

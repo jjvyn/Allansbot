@@ -1,6 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap');
+
 body {
-  font-family: sans-serif;
+  font-family: 'Open Sans', sans-serif;
   margin: 0;
+  background-color: #f4f4f4;
 }
 
 #chat-launcher {
@@ -28,6 +31,7 @@ body {
   display: flex;
   flex-direction: column;
   z-index: 1000;
+  overflow: hidden;
 }
 
 .hidden {
@@ -52,14 +56,94 @@ body {
 
 #chat-body {
   flex: 1;
-  padding: 10px;
+  padding: 15px;
   overflow-y: auto;
   font-size: 14px;
+  background-color: #f9f9f9;
 }
 
+/* Chat Messages */
+.message {
+  margin: 20px 0;
+  display: flex;
+  align-items: flex-start;
+}
+
+.message.bot {
+  flex-direction: row;
+}
+
+.message.user {
+  flex-direction: row-reverse;
+}
+
+.name-label {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 8px;
+  color: #888;
+  min-width: 45px;
+  text-align: center;
+}
+
+.bubble {
+  max-width: 70%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.4;
+  position: relative;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.message.bot .bubble {
+  background: #f0f0f0;
+  color: #333;
+  border-bottom-left-radius: 2px;
+}
+
+.message.user .bubble {
+  background: #0077c8;
+  color: white;
+  border-bottom-right-radius: 2px;
+}
+
+/* Typing Indicator */
+.typing {
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  height: 24px;
+}
+
+.typing span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 2px;
+  background: #aaa;
+  border-radius: 50%;
+  animation: bounce 1.3s infinite ease-in-out;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+/* Chat Form */
 #chat-form {
   display: flex;
   border-top: 1px solid #ccc;
+  background: #fff;
 }
 
 #chat-input {
@@ -67,6 +151,7 @@ body {
   border: none;
   padding: 10px;
   font-size: 14px;
+  outline: none;
 }
 
 #chat-form button {
@@ -74,5 +159,11 @@ body {
   color: white;
   border: none;
   padding: 0 15px;
+  font-size: 16px;
   cursor: pointer;
+  transition: background 0.3s;
+}
+
+#chat-form button:hover {
+  background: #005fa3;
 }

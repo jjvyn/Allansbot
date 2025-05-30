@@ -4,21 +4,50 @@
   <meta charset="UTF-8">
   <title>Allan's Virtual Tech</title>
   <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
+
+  <!-- Launcher Button -->
   <div id="chat-launcher">💬</div>
+
+  <!-- Chat Widget -->
   <div id="chat-widget" class="hidden">
     <div id="chat-header">
-      <img src="https://www.allanspoolshop.com.au/wp-content/uploads/2022/07/i-logo.png" alt="Allan's Pool Shop Logo" id="chat-logo" style="height: 30px; margin-right: 8px;" />
+      <img src="https://www.allanspoolshop.com.au/wp-content/uploads/2022/07/i-logo.png" alt="Allan's Pool Shop Logo" id="chat-logo" />
       <h2>Hi, I’m Allan. Ask anything about pool care 👋</h2>
     </div>
-    <div id="chat-body"></div>
+
+    <!-- Chat Message Area -->
+    <div id="chat-body">
+      <!-- Example message - Bot -->
+      <!--
+      <div class="message bot">
+        <div class="name-label">Allan</div>
+        <div class="bubble">Hi there! How can I help with your pool today?</div>
+      </div>
+
+      <div class="message user">
+        <div class="name-label">You</div>
+        <div class="bubble">Can someone clean my pool?</div>
+      </div>
+
+      <div class="message bot">
+        <div class="name-label">Allan</div>
+        <div class="bubble typing">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+      -->
+    </div>
+
+    <!-- Chat Input -->
     <form id="chat-form">
       <input type="text" id="chat-input" placeholder="Type your message..." autocomplete="off" required>
       <button type="submit">➤</button>
     </form>
 
-    <!-- ✅ Finish Chat button -->
+    <!-- Finish Chat Button -->
     <button id="end-chat" style="margin: 10px auto; display: block; background-color: #0077cc; color: white; padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer;">
       Finish Chat
     </button>
