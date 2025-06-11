@@ -1,77 +1,55 @@
 const nodemailer = require('nodemailer');
-const path = require('path');
-const fs = require('fs');
 
-// Create transporter
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS
   }
 });
 
-/**
- * Send summary email to service dept and customer
- */
-exports.sendSummaryEmails = async ({ toService, toCustomer, summary, imagePaths }) => {
-  try {
-    // Build image URLs for the service department email
-    const imageLinks = imagePaths && imagePaths.length > 0
-      ? imagePaths.map(name => `${process.env.SERVER_BASE_URL}/uploads/${name}`).join('\n')
-      : 'No images uploaded.';
+exports.sendLeadEmail = async ({
+  name,
+  email,
+  phone,
+  address,
+  accessInfo,
+  summary,
+  imageUrls = [],
+  isCustomerCopy = false
+}) => {
+  const to = isCustomerCopy ? email : process.env.SERVICE_EMAIL;
+  const subject = isCustomerCopy
+    ? 'Thanks for your enquiry with Allan’s Pool Shop'
+    : `Customer Enquiry: ${name || 'Unknown'}`;
 
-    // ---------- SERVICE DEPARTMENT EMAIL ----------
-    const serviceMailOptions = {
-      from: `"Allan’s Virtual Tech" <${process.env.EMAIL_USER}>`,
-      to: toService,
-      subject: `Customer Enquiry: ${toCustomer.name || 'Unknown'}`,
-      text: `
-New chat enquiry received:
+  const html = `
+    <div style="font-family: Arial, sans-serif; font-size: 15px;">
+      ${isCustomerCopy ? `
+        <p>Hi ${name || 'there'},</p>
+        <p>Thanks for chatting with Allan’s Virtual Tech. Your request has been received and one of our team will be in touch shortly.</p>
+      ` : `
+        <p><strong>New lead received</strong></p>
+        <p><strong>Name:</strong> ${name || 'N/A'}<br>
+        <strong>Email:</strong> ${email || 'N/A'}<br>
+        <strong>Phone:</strong> ${phone || 'N/A'}<br>
+        <strong>Address:</strong> ${address || 'N/A'}<br>
+        <strong>Access Info:</strong> ${accessInfo || 'N/A'}</p>
+        <p><strong>Summary:</strong><br>${summary || 'N/A'}</p>
+        ${imageUrls.length > 0
+          ? `<p><strong>Image(s):</strong><br>${imageUrls.map(url => `<a href="${url}">${url}</a>`).join('<br>')}</p>`
+          : `<p><em>No images submitted.</em></p>`}
+      `}
+      <p style="margin-top: 20px;">– Allan's Pool Shop</p>
+    </div>
+  `;
 
-Name: ${toCustomer.name || 'N/A'}
-Email: ${toCustomer.email || 'N/A'}
-Phone: ${toCustomer.phone || 'N/A'}
-Address: ${toCustomer.address || 'N/A'}
-Access Info: ${toCustomer.accessInfo || 'N/A'}
+  await transporter.sendMail({
+    from: `"Allan’s Pool Shop" <${process.env.MAIL_USER}>`,
+    to,
+    subject,
+    html
+  });
 
-Summary:
-${summary || 'No summary provided.'}
-
-Uploaded Images:
-${imageLinks}
-      `.trim()
-    };
-
-    // ---------- CUSTOMER EMAIL ----------
-    const customerMailOptions = {
-      from: `"Allan’s Virtual Tech" <${process.env.EMAIL_USER}>`,
-      to: toCustomer.email,
-      subject: `Thanks for your enquiry with Allan’s Pool Shop`,
-      text: `
-Hi ${toCustomer.name || 'there'},
-
-Thanks for your message. One of our technicians will be in touch shortly to confirm your booking or assist with your enquiry.
-
-Here’s a summary of what you sent:
-
-${summary || 'No summary provided.'}
-
-If you have any questions in the meantime, feel free to call us.
-
-Best regards,  
-Allan’s Pool Shop
-      `.trim()
-    };
-
-    // Send both emails in parallel
-    await Promise.all([
-      transporter.sendMail(serviceMailOptions),
-      transporter.sendMail(customerMailOptions)
-    ]);
-
-    console.log('✅ Emails sent to both service and customer');
-  } catch (err) {
-    console.error('❌ Error sending emails:', err);
-  }
+  console.log(`📧 Email sent to ${to}`);
 };
