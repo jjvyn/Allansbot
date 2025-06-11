@@ -1,71 +1,89 @@
+require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
-const path = require('path');
 const fs = require('fs');
-require('dotenv').config();
+const path = require('path');
+
+const { sendEmails } = require('./email');
+const { processMessage } = require('./openai');
+const { saveToGoogleSheet } = require('./sheets');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
-const { handleChat } = require('./services/openai.js');
-const { logToSheet } = require('./services/sheets.js');
-const { sendEmails } = require('./services/email.js');
-
-// Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname)));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Multer config
+// === Serve index.html at root ===
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// === Image upload handling ===
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, 'uploads');
-    fs.mkdirSync(uploadPath, { recursive: true });
-    cb(null, uploadPath);
-  },
+  destination: 'uploads/',
   filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + file.originalname;
-    cb(null, unique);
-  }
+    const uniqueName = `${Date.now()}-${file.originalname}`;
+    cb(null, uniqueName);
+  },
 });
 const upload = multer({ storage });
 
-// Chat endpoint
-app.post('/api/chat', async (req, res) => {
-  const { message, clientId } = req.body;
-  try {
-    const reply = await handleChat(message, clientId);
-    res.json({ reply });
-  } catch (err) {
-    console.error('Chat error:', err);
-    res.status(500).json({ reply: 'Error generating response' });
+const sessions = {};
+
+app.post('/upload', upload.single('image'), (req, res) => {
+  const sessionId = req.body.sessionId;
+  if (!sessions[sessionId]) sessions[sessionId] = { messages: [] };
+
+  const imageUrl = `${process.env.BASE_URL}/uploads/${req.file.filename}`;
+  sessions[sessionId].imageUrls = sessions[sessionId].imageUrls || [];
+  sessions[sessionId].imageUrls.push(imageUrl);
+
+  console.log(`Uploaded: ${imageUrl}`);
+  res.json({ success: true, url: imageUrl });
+});
+
+app.post('/chat', async (req, res) => {
+  const { sessionId, message } = req.body;
+  if (!sessions[sessionId]) sessions[sessionId] = { messages: [] };
+
+  sessions[sessionId].messages.push({ role: 'user', content: message });
+  const reply = await processMessage(sessions[sessionId].messages);
+  sessions[sessionId].messages.push({ role: 'assistant', content: reply });
+
+  res.json({ reply });
+});
+
+app.post('/end-chat', async (req, res) => {
+  const { sessionId, contactInfo } = req.body;
+  const session = sessions[sessionId];
+
+  if (session) {
+    const summary = session.messages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => `${m.role === 'user' ? 'Customer' : 'Allan'}: ${m.content}`)
+      .join('\n');
+
+    const emailOptions = {
+      contactInfo,
+      summary,
+      imageUrls: session.imageUrls || [],
+    };
+
+    console.log('📧 Preparing emails for', sessionId);
+    await sendEmails(emailOptions);
+    await saveToGoogleSheet(contactInfo, summary);
+
+    console.log('✅ Session completed for', sessionId);
+    delete sessions[sessionId];
   }
+
+  res.json({ success: true });
 });
 
-// Upload endpoint
-app.post('/api/upload', upload.single('image'), (req, res) => {
-  const file = req.file;
-  if (!file) return res.status(400).send('No file uploaded.');
-  const imageUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/uploads/${file.filename}`;
-  res.json({ imageUrl });
-});
-
-// End session endpoint
-app.post('/api/end-session', async (req, res) => {
-  const { clientId, customer, summary, images = [] } = req.body;
-  try {
-    console.log('📤 Preparing emails for', clientId);
-    await logToSheet(customer, summary);
-    await sendEmails(customer, summary, images);
-    console.log('✅ Session completed for', clientId);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('❌ End session error:', err);
-    res.status(500).json({ error: 'Failed to complete session' });
-  }
-});
-
-app.listen(port, () => {
-  console.log(`🚀 Server running on http://localhost:${port}`);
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
