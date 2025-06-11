@@ -8,14 +8,12 @@ const imageInput = document.getElementById('imageUpload');
 const uploadButton = document.getElementById('upload-button');
 
 let chatEnded = false;
-const apiBase = 'https://allansbot.onrender.com'; // 🔧 Explicitly use Render URL
+const apiBase = window.location.origin; // ✅ Use same origin as deployed frontend
 
-// ✅ Toggle chat visibility
 launcher.addEventListener('click', () => {
   widget.classList.toggle('hidden');
 });
 
-// ✅ Handle chat submit
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (chatEnded) return;
@@ -51,14 +49,12 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
-// ✅ Trigger camera/gallery
 uploadButton.addEventListener('click', () => {
   if (!chatEnded) {
     imageInput.click();
   }
 });
 
-// ✅ Image upload handler
 imageInput.addEventListener('change', async function () {
   const file = this.files[0];
   if (!file || chatEnded) return;
@@ -87,7 +83,6 @@ imageInput.addEventListener('change', async function () {
   }
 });
 
-// ✅ Manual chat end
 endButton.addEventListener('click', async () => {
   if (chatEnded) return;
 
@@ -114,7 +109,6 @@ endButton.addEventListener('click', async () => {
   }
 });
 
-// ✅ Send message programmatically
 async function sendMessage(text) {
   const typingEl = addTypingIndicator();
 
@@ -137,7 +131,6 @@ async function sendMessage(text) {
   }
 }
 
-// ✅ Add message bubble
 function addMessage(sender, text) {
   const msg = document.createElement('div');
   msg.className = `message ${sender}`;
@@ -170,7 +163,6 @@ function addMessage(sender, text) {
   body.scrollTop = body.scrollHeight;
 }
 
-// ✅ Append image bubble
 function appendImage(url) {
   const msg = document.createElement('div');
   msg.className = 'message user';
@@ -189,7 +181,6 @@ function appendImage(url) {
   body.scrollTop = body.scrollHeight;
 }
 
-// ✅ Typing indicator
 function addTypingIndicator() {
   const msg = document.createElement('div');
   msg.className = 'message bot';
@@ -210,7 +201,6 @@ function addTypingIndicator() {
   return msg;
 }
 
-// ✅ Trim long replies unless keywords exist
 function trimIfTooLong(text) {
   const maxSentences = 3;
   const mustKeep = ['address', 'email', 'technician', 'book', 'sample'];
@@ -221,7 +211,6 @@ function trimIfTooLong(text) {
   return sentences.slice(0, maxSentences).join(' ') + (sentences.length > maxSentences ? ' [...]' : '');
 }
 
-// ✅ Lock UI after chat ends
 function disableChat() {
   if (chatEnded) return;
   chatEnded = true;
