@@ -1,76 +1,77 @@
 const nodemailer = require('nodemailer');
+const path = require('path');
+const fs = require('fs');
 
-exports.sendLeadEmail = async ({ name, email, phone, address, accessInfo, summary, imageUrls = [], isCustomerCopy = false }) => {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.SENDER_EMAIL,
-      pass: process.env.SENDER_PASS
-    }
-  });
+// Create transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
 
-  const isValidEmail = (value) => typeof value === 'string' && value.includes('@');
+/**
+ * Send summary email to service dept and customer
+ */
+exports.sendSummaryEmails = async ({ toService, toCustomer, summary, imagePaths }) => {
+  try {
+    // Build image URLs for the service department email
+    const imageLinks = imagePaths && imagePaths.length > 0
+      ? imagePaths.map(name => `${process.env.SERVER_BASE_URL}/uploads/${name}`).join('\n')
+      : 'No images uploaded.';
 
-  const recipient = isCustomerCopy && isValidEmail(email)
-    ? email
-    : process.env.RECIPIENT_EMAIL;
+    // ---------- SERVICE DEPARTMENT EMAIL ----------
+    const serviceMailOptions = {
+      from: `"Allan’s Virtual Tech" <${process.env.EMAIL_USER}>`,
+      to: toService,
+      subject: `Customer Enquiry: ${toCustomer.name || 'Unknown'}`,
+      text: `
+New chat enquiry received:
 
-  const subject = isCustomerCopy
-    ? 'We’ve received your service request'
-    : `Customer Enquiry: ${name || 'Unknown'}`;
+Name: ${toCustomer.name || 'N/A'}
+Email: ${toCustomer.email || 'N/A'}
+Phone: ${toCustomer.phone || 'N/A'}
+Address: ${toCustomer.address || 'N/A'}
+Access Info: ${toCustomer.accessInfo || 'N/A'}
 
-  const textBody = isCustomerCopy
-    ? `Hi ${name || 'there'},\n\nThanks for contacting us! We’ve received your request and a technician will be in touch shortly.\n\n- The Allan’s Pool Shop Team`
-    : `
-CUSTOMER CONTACT DETAILS
-------------------------
-Name: ${name || 'Unknown'}
-Email: ${email || 'Unknown'}
-Phone: ${phone || 'Unknown'}
-Address: ${address || 'Unknown'}
-Access Info: ${accessInfo || 'None provided'}
-
-CHAT SUMMARY
-------------
+Summary:
 ${summary || 'No summary provided.'}
 
-${imageUrls.length ? '\nIMAGES:\n' + imageUrls.join('\n') : ''}
-  `;
+Uploaded Images:
+${imageLinks}
+      `.trim()
+    };
 
-  const htmlBody = isCustomerCopy
-    ? `
-      <p>Hi ${name || 'there'},</p>
-      <p>Thanks for contacting us! We’ve received your request and a technician will be in touch shortly.</p>
-      <p>- The Allan’s Pool Shop Team</p>
-    `
-    : `
-      <h3>CUSTOMER CONTACT DETAILS</h3>
-      <p><strong>Name:</strong> ${name || 'Unknown'}<br>
-      <strong>Email:</strong> ${email || 'Unknown'}<br>
-      <strong>Phone:</strong> ${phone || 'Unknown'}<br>
-      <strong>Address:</strong> ${address || 'Unknown'}<br>
-      <strong>Access Info:</strong> ${accessInfo || 'None provided'}</p>
+    // ---------- CUSTOMER EMAIL ----------
+    const customerMailOptions = {
+      from: `"Allan’s Virtual Tech" <${process.env.EMAIL_USER}>`,
+      to: toCustomer.email,
+      subject: `Thanks for your enquiry with Allan’s Pool Shop`,
+      text: `
+Hi ${toCustomer.name || 'there'},
 
-      <h3>CHAT SUMMARY</h3>
-      <p>${summary || 'No summary provided.'}</p>
+Thanks for your message. One of our technicians will be in touch shortly to confirm your booking or assist with your enquiry.
 
-      ${
-        imageUrls.length
-          ? `<h3>UPLOADED IMAGE${imageUrls.length > 1 ? 'S' : ''}</h3>` +
-            imageUrls.map(url =>
-              `<a href="${url}" target="_blank"><img src="${url}" style="max-width: 200px; margin: 8px; border-radius: 6px;" /></a>`
-            ).join('')
-          : ''
-      }
-    `;
+Here’s a summary of what you sent:
 
-  const mailOptions = {
-    from: process.env.SENDER_EMAIL,
-    to: recipient,
-    subject,
-    text: textBody,
-    html: htmlBody
-  };
+${summary || 'No summary provided.'}
 
-  await transporter.sendMail(mailOptions);
+If you have any questions in the meantime, feel free to call us.
+
+Best regards,  
+Allan’s Pool Shop
+      `.trim()
+    };
+
+    // Send both emails in parallel
+    await Promise.all([
+      transporter.sendMail(serviceMailOptions),
+      transporter.sendMail(customerMailOptions)
+    ]);
+
+    console.log('✅ Emails sent to both service and customer');
+  } catch (err) {
+    console.error('❌ Error sending emails:', err);
+  }
 };
