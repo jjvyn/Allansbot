@@ -1,67 +1,71 @@
-require('dotenv').config();
 const express = require('express');
+const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
-const multer = require('multer');
 const fs = require('fs');
-
-const { getBotReply, getSummaryAndContact } = require('./services/openai');
-const { sendLeadEmail } = require('./services/email');
-const { logToSheet } = require('./services/sheets');
+require('dotenv').config();
 
 const app = express();
+const port = process.env.PORT || 3000;
+
+const { handleChat } = require('./services/openai.js');
+const { logToSheet } = require('./services/sheets.js');
+const { sendEmails } = require('./services/email.js');
+
+// Middleware
 app.use(cors());
 app.use(express.json());
-
-const PORT = process.env.PORT || 3000;
-const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
-
-// Confirm environment vars
-console.log('🔑 OPENAI_API_KEY loaded?', !!process.env.OPENAI_API_KEY);
-console.log('📄 GOOGLE_KEY_BASE64 loaded?', !!process.env.GOOGLE_KEY_BASE64);
-
-// Ensure uploads dir
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-
-// Serve static files
-app.use(express.static(path.join(__dirname, '/')));
-app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Multer config
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsDir),
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-
-const upload = multer({
-  storage,
-  fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Only image files allowed.'));
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(__dirname, 'uploads');
+    fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
   },
-  limits: { fileSize: 5 * 1024 * 1024 }
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + file.originalname;
+    cb(null, unique);
+  }
+});
+const upload = multer({ storage });
+
+// Chat endpoint
+app.post('/api/chat', async (req, res) => {
+  const { message, clientId } = req.body;
+  try {
+    const reply = await handleChat(message, clientId);
+    res.json({ reply });
+  } catch (err) {
+    console.error('Chat error:', err);
+    res.status(500).json({ reply: 'Error generating response' });
+  }
 });
 
+// Upload endpoint
 app.post('/api/upload', upload.single('image'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Invalid file type or size.' });
-  const imageUrl = `/uploads/${req.file.filename}`;
-  console.log(`📷 Uploaded: ${imageUrl}`);
+  const file = req.file;
+  if (!file) return res.status(400).send('No file uploaded.');
+  const imageUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/uploads/${file.filename}`;
   res.json({ imageUrl });
 });
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// End session endpoint
+app.post('/api/end-session', async (req, res) => {
+  const { clientId, customer, summary, images = [] } = req.body;
+  try {
+    console.log('📤 Preparing emails for', clientId);
+    await logToSheet(customer, summary);
+    await sendEmails(customer, summary, images);
+    console.log('✅ Session completed for', clientId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('❌ End session error:', err);
+    res.status(500).json({ error: 'Failed to complete session' });
+  }
 });
 
-// Session state
-const sessionHistory = {};
-const sessionTimeouts = {};
-
-app.post('/api/chat', async (req, res) => {
-  const { message, clientId } = req.body;
-
-  try {
-    const reply = await getBotReply(message, clientId);
-    if (!sessionHistory[clientId]) sessionHistory[clientId] = [];
-    sessionHistory[clientId].push({ user: message,
+app.listen(port, () => {
+  console.log(`🚀 Server running on http://localhost:${port}`);
+});
