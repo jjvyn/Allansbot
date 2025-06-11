@@ -17,7 +17,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Multer setup for file uploads
+// Multer config
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, './uploads/');
@@ -36,9 +36,14 @@ app.get('/', (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, clientId } = req.body;
+    const { message, clientId, imageUrl, email } = req.body;
     const reply = await handleChat(message, clientId);
     res.json({ reply });
+
+    // Send technician email with image (if any)
+    if (email || imageUrl) {
+      await sendEmail({ message, email, imageUrl });
+    }
   } catch (err) {
     console.error('Chat error:', err);
     res.status(500).json({ reply: "Sorry, something went wrong." });
@@ -48,7 +53,6 @@ app.post('/api/chat', async (req, res) => {
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    await sendEmail({ imageUrl });
     res.json({ imageUrl });
   } catch (err) {
     console.error('Upload error:', err);
@@ -56,7 +60,7 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
   }
 });
 
-// Start
+// Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
