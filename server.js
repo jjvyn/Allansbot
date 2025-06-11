@@ -1,89 +1,159 @@
 require('dotenv').config();
 const express = require('express');
-const multer = require('multer');
 const cors = require('cors');
-const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
 
-const { sendEmails } = require('./email');
-const { processMessage } = require('./openai');
-const { saveToGoogleSheet } = require('./sheets');
+const { getBotReply, getSummaryAndContact } = require('./services/openai');
+const { sendLeadEmail } = require('./services/email');
+const { logToSheet } = require('./services/sheets');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// === Serve index.html at root ===
+const PORT = process.env.PORT || 3000;
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+
+// Confirm required environment variables
+console.log('🔑 OPENAI_API_KEY loaded?', !!process.env.OPENAI_API_KEY);
+console.log('📄 GOOGLE_KEY_BASE64 loaded?', !!process.env.GOOGLE_KEY_BASE64);
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+app.use(express.static(path.join(__dirname, '/')));
+app.use('/uploads', express.static(uploadsDir));
+
+// Multer config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  allowed.includes(file.mimetype)
+    ? cb(null, true)
+    : cb(new Error('Only image files allowed.'));
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+app.post('/api/upload', upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Invalid file type or size.' });
+  }
+  const imageUrl = `${BASE_URL}/uploads/${req.file.filename}`;
+  res.json({ imageUrl });
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// === Image upload handling ===
-const storage = multer.diskStorage({
-  destination: 'uploads/',
-  filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${file.originalname}`;
-    cb(null, uniqueName);
-  },
-});
-const upload = multer({ storage });
+const sessionHistory = {};
+const sessionTimeouts = {};
 
-const sessions = {};
+app.post('/api/chat', async (req, res) => {
+  const { message, clientId } = req.body;
 
-app.post('/upload', upload.single('image'), (req, res) => {
-  const sessionId = req.body.sessionId;
-  if (!sessions[sessionId]) sessions[sessionId] = { messages: [] };
+  try {
+    const reply = await getBotReply(message, clientId);
+    if (!sessionHistory[clientId]) sessionHistory[clientId] = [];
+    sessionHistory[clientId].push({ user: message, bot: reply });
 
-  const imageUrl = `${process.env.BASE_URL}/uploads/${req.file.filename}`;
-  sessions[sessionId].imageUrls = sessions[sessionId].imageUrls || [];
-  sessions[sessionId].imageUrls.push(imageUrl);
+    const normalised = message.trim().toLowerCase();
+    const endPhrases = [
+      'no', 'no thanks', 'that’s all', 'thanks that’s all',
+      'i’m done', 'nothing else', 'end chat', 'end_chat_now',
+      'thanks', 'thank you', 'cheers', 'ta', 'appreciate it'
+    ];
 
-  console.log(`Uploaded: ${imageUrl}`);
-  res.json({ success: true, url: imageUrl });
-});
+    if (endPhrases.includes(normalised)) {
+      const confirmation = await handleSessionEnd(clientId);
+      return res.json({ reply: confirmation });
+    } else {
+      resetSessionTimeout(clientId);
+    }
 
-app.post('/chat', async (req, res) => {
-  const { sessionId, message } = req.body;
-  if (!sessions[sessionId]) sessions[sessionId] = { messages: [] };
-
-  sessions[sessionId].messages.push({ role: 'user', content: message });
-  const reply = await processMessage(sessions[sessionId].messages);
-  sessions[sessionId].messages.push({ role: 'assistant', content: reply });
-
-  res.json({ reply });
+    res.json({ reply });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ reply: 'Oops! Something went wrong.' });
+  }
 });
 
-app.post('/end-chat', async (req, res) => {
-  const { sessionId, contactInfo } = req.body;
-  const session = sessions[sessionId];
+const resetSessionTimeout = (clientId) => {
+  if (sessionTimeouts[clientId]) clearTimeout(sessionTimeouts[clientId]);
+  sessionTimeouts[clientId] = setTimeout(() => handleSessionEnd(clientId), 2 * 60 * 1000);
+};
 
-  if (session) {
-    const summary = session.messages
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => `${m.role === 'user' ? 'Customer' : 'Allan'}: ${m.content}`)
-      .join('\n');
+const handleSessionEnd = async (clientId) => {
+  const history = sessionHistory[clientId];
+  if (!history || history.length === 0) return;
 
-    const emailOptions = {
-      contactInfo,
+  const { name, email, phone, address, accessInfo, summary } = await getSummaryAndContact(clientId);
+
+  const imageUrls = history
+    .flatMap(entry => {
+      const matches = entry.user?.match(/\/uploads\/[^\s"'<>]+/g);
+      return matches?.map(relative => `${BASE_URL}${relative}`) || [];
+    });
+
+  try {
+    await sendLeadEmail({
+      name,
+      email,
+      phone,
+      address,
+      accessInfo,
       summary,
-      imageUrls: session.imageUrls || [],
-    };
+      imageUrls,
+      isCustomerCopy: false
+    });
 
-    console.log('📧 Preparing emails for', sessionId);
-    await sendEmails(emailOptions);
-    await saveToGoogleSheet(contactInfo, summary);
+    if (email && email.includes('@')) {
+      await sendLeadEmail({
+        name,
+        email,
+        phone,
+        address,
+        accessInfo,
+        summary,
+        imageUrls,
+        isCustomerCopy: true
+      });
+    }
 
-    console.log('✅ Session completed for', sessionId);
-    delete sessions[sessionId];
+    await logToSheet({
+      clientId,
+      name,
+      email,
+      phone,
+      address,
+      accessInfo,
+      summary,
+      imageUrls
+    });
+
+    console.log(`✅ Lead processed for ${clientId}`);
+  } catch (err) {
+    console.error(`❌ Error finalising session for ${clientId}`, err);
   }
 
-  res.json({ success: true });
-});
+  delete sessionHistory[clientId];
+  delete sessionTimeouts[clientId];
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+  return 'Thanks! I’ve sent your details to our team. They’ll be in touch shortly. Have a great day!';
+};
+
+app.listen(PORT, () => console.log(`🚀 Server running on ${BASE_URL}`));
