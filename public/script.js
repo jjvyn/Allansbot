@@ -4,7 +4,6 @@ const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
 const uploadInput = document.getElementById('upload-input');
 
-// Use absolute API path with correct endpoint
 const BASE_URL = 'https://allansbot.onrender.com';
 
 function appendMessage(sender, text) {
@@ -23,7 +22,7 @@ async function sendMessage() {
   messageInput.value = '';
 
   try {
-    const response = await fetch(`${BASE_URL}/message`, {
+    const response = await fetch(`${BASE_URL}/api/message`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -43,11 +42,39 @@ async function sendMessage() {
   }
 }
 
+async function uploadImage(file) {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  appendMessage('user', 'Uploading image...');
+
+  try {
+    const response = await fetch(`${BASE_URL}/api/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Image upload failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    appendMessage('bot', data.message || 'Image uploaded successfully.');
+  } catch (error) {
+    console.error('Image upload error:', error);
+    appendMessage('bot', 'There was an error uploading your image.');
+  }
+}
+
 sendButton.addEventListener('click', sendMessage);
+
 messageInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') sendMessage();
 });
 
 uploadInput.addEventListener('change', () => {
-  appendMessage('user', '[Image uploaded]');
+  const file = uploadInput.files[0];
+  if (file) {
+    uploadImage(file);
+  }
 });
