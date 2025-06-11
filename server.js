@@ -1,44 +1,46 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors');
-const dotenv = require('dotenv');
 const path = require('path');
-
-dotenv.config();
+const cors = require('cors');
+const { processMessage } = require('./openai');
+const { sendCustomerEmail, sendServiceEmail } = require('./email');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors()); // allow requests from all origins
+app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Routes
+// 🔧 Add API route
 app.post('/api/message', async (req, res) => {
   try {
-    const { name, email, phone, message, imageUrls } = req.body;
+    const { message, name, email, phone, imageUrls, address, accessInfo } = req.body;
 
-    console.log('Request received:', { name, email, phone, message, imageUrls });
+    const botResponse = await processMessage(message);
 
-    const [summary, emailResult, sheetResult] = await Promise.all([
-      require('./openai').generateReply(message),
-      require('./services/email').sendEmailWithImage(name, email, phone, message, imageUrls),
-      require('./sheets').appendToSheet(name, email, phone, message, imageUrls),
-    ]);
+    // Send email to service team
+    await sendServiceEmail({ message, name, email, phone, imageUrls, address, accessInfo });
 
-    res.status(200).json({ summary });
-  } catch (error) {
-    console.error('POST /api/message error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    // Send confirmation to customer
+    if (email) {
+      await sendCustomerEmail({ message, name, email, phone, imageUrls });
+    }
+
+    res.status(200).json({ reply: botResponse });
+  } catch (err) {
+    console.error('Error in /api/message:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
-// Default route to serve index.html
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/index.html'));
+// Fallback: serve index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Start server
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
