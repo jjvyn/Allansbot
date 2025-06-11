@@ -3,6 +3,7 @@ const cors = require('cors');
 const fileUpload = require('express-fileupload');
 const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs');
 
 dotenv.config();
 
@@ -16,36 +17,41 @@ app.use(express.urlencoded({ extended: true }));
 app.use(fileUpload());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Routes
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// API route for message
 app.post('/api/message', async (req, res) => {
   try {
     const message = req.body.message || '';
-    const image = req.files?.image;
+    let imageUrl = null;
 
-    // Simulate logic: echo message and image
-    const response = {
-      reply: `Received: ${message}`,
-      imageUrl: image ? `/uploads/${image.name}` : null,
-    };
-
-    if (image) {
-      const uploadPath = path.join(__dirname, 'public', 'uploads', image.name);
-      await image.mv(uploadPath);
+    if (req.files && req.files.image) {
+      const image = req.files.image;
+      const imagePath = path.join(uploadsDir, image.name);
+      await image.mv(imagePath);
+      imageUrl = `/uploads/${image.name}`;
     }
 
-    return res.json(response);
+    return res.status(200).json({
+      reply: `Received: ${message}`,
+      imageUrl,
+    });
   } catch (err) {
-    console.error('POST /api/message error:', err.message);
+    console.error('POST /api/message error:', err);
     return res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Serve frontend
+// Catch-all: serve frontend
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
