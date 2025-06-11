@@ -1,80 +1,76 @@
-const chatContainer = document.getElementById('chat-container');
-const chatBox = document.getElementById('chat-box');
-const messageInput = document.getElementById('message-input');
-const sendButton = document.getElementById('send-button');
-const uploadInput = document.getElementById('upload-input');
+const chatbox = document.getElementById('chatbox');
+const inputField = document.getElementById('userInput');
+const uploadButton = document.getElementById('uploadImage');
 
-const BASE_URL = 'https://allansbot.onrender.com';
+const API_BASE = 'https://allansbot.onrender.com/api';
 
-function appendMessage(sender, text) {
-  const messageElement = document.createElement('div');
-  messageElement.classList.add('message', sender);
-  messageElement.innerText = text;
-  chatBox.appendChild(messageElement);
-  chatBox.scrollTop = chatBox.scrollHeight;
+function appendMessage(sender, message) {
+  const msgDiv = document.createElement('div');
+  msgDiv.classList.add('message', sender);
+  msgDiv.innerText = message;
+  chatbox.appendChild(msgDiv);
+  chatbox.scrollTop = chatbox.scrollHeight;
 }
 
 async function sendMessage() {
-  const message = messageInput.value.trim();
+  const message = inputField.value.trim();
   if (!message) return;
 
   appendMessage('user', message);
-  messageInput.value = '';
+  inputField.value = '';
 
   try {
-    const response = await fetch(`${BASE_URL}/api/message`, {
+    const response = await fetch(`${API_BASE}/message`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ message }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
     });
 
-    if (!response.ok) {
-      throw new Error(`Server responded with ${response.status}`);
-    }
+    if (!response.ok) throw new Error('Server responded with an error');
 
     const data = await response.json();
-    appendMessage('bot', data.reply || 'Sorry, I didn’t understand that.');
-  } catch (error) {
-    console.error('Error:', error);
+    appendMessage('bot', data.response || 'No response from server.');
+  } catch (err) {
+    console.error('Error sending message:', err);
     appendMessage('bot', 'Error reaching the server.');
   }
 }
 
-async function uploadImage(file) {
-  const formData = new FormData();
-  formData.append('image', file);
+async function uploadImage(event) {
+  const file = event.target.files[0];
+  if (!file) return;
 
   appendMessage('user', 'Uploading image...');
 
+  const formData = new FormData();
+  formData.append('image', file);
+
   try {
-    const response = await fetch(`${BASE_URL}/api/upload`, {
+    const response = await fetch(`${API_BASE}/upload`, {
       method: 'POST',
-      body: formData,
+      body: formData
     });
 
-    if (!response.ok) {
-      throw new Error(`Image upload failed: ${response.status}`);
-    }
+    if (!response.ok) throw new Error('Upload failed');
 
     const data = await response.json();
-    appendMessage('bot', data.message || 'Image uploaded successfully.');
-  } catch (error) {
-    console.error('Image upload error:', error);
+    const img = document.createElement('img');
+    img.src = data.imageUrl;
+    img.alt = 'Uploaded';
+    img.style.maxWidth = '100%';
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message', 'user');
+    msgDiv.appendChild(img);
+    chatbox.appendChild(msgDiv);
+    chatbox.scrollTop = chatbox.scrollHeight;
+  } catch (err) {
+    console.error('Upload error:', err);
     appendMessage('bot', 'There was an error uploading your image.');
   }
 }
 
-sendButton.addEventListener('click', sendMessage);
-
-messageInput.addEventListener('keypress', (e) => {
+// Event listeners
+inputField.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') sendMessage();
 });
-
-uploadInput.addEventListener('change', () => {
-  const file = uploadInput.files[0];
-  if (file) {
-    uploadImage(file);
-  }
-});
+uploadButton.addEventListener('change', uploadImage);
