@@ -1,66 +1,44 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const multer = require('multer');
 const cors = require('cors');
+const dotenv = require('dotenv');
 const path = require('path');
-require('dotenv').config();
 
-const { handleChat } = require('./openai');
-const { sendEmail } = require('./email');
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors()); // allow requests from all origins
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Multer config
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, './uploads/');
-  },
-  filename: function (req, file, cb) {
-    const uniqueName = `${Date.now()}-${file.originalname}`;
-    cb(null, uniqueName);
-  }
-});
-const upload = multer({ storage: storage });
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes
+app.post('/api/message', async (req, res) => {
+  try {
+    const { name, email, phone, message, imageUrls } = req.body;
+
+    console.log('Request received:', { name, email, phone, message, imageUrls });
+
+    const [summary, emailResult, sheetResult] = await Promise.all([
+      require('./openai').generateReply(message),
+      require('./services/email').sendEmailWithImage(name, email, phone, message, imageUrls),
+      require('./sheets').appendToSheet(name, email, phone, message, imageUrls),
+    ]);
+
+    res.status(200).json({ summary });
+  } catch (error) {
+    console.error('POST /api/message error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Default route to serve index.html
 app.get('/', (req, res) => {
-  res.send('Bot is running.');
+  res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { message, clientId, imageUrl, email } = req.body;
-    const reply = await handleChat(message, clientId);
-    res.json({ reply });
-
-    // Send technician email with image (if any)
-    if (email || imageUrl) {
-      await sendEmail({ message, email, imageUrl });
-    }
-  } catch (err) {
-    console.error('Chat error:', err);
-    res.status(500).json({ reply: "Sorry, something went wrong." });
-  }
-});
-
-app.post('/api/upload', upload.single('image'), async (req, res) => {
-  try {
-    const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    res.json({ imageUrl });
-  } catch (err) {
-    console.error('Upload error:', err);
-    res.status(500).json({ error: 'Image upload failed.' });
-  }
-});
-
-// Start server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });
