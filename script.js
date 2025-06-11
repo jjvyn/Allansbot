@@ -8,7 +8,7 @@ const imageInput = document.getElementById('imageUpload');
 const uploadButton = document.getElementById('upload-button');
 
 let chatEnded = false;
-const apiBase = window.location.origin;
+const apiBase = 'https://allansbot.onrender.com'; // 🔧 Explicitly use Render URL
 
 // ✅ Toggle chat visibility
 launcher.addEventListener('click', () => {
@@ -32,10 +32,7 @@ form.addEventListener('submit', async (e) => {
     const res = await fetch(`${apiBase}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: userMessage,
-        clientId: 'cairns-poolpros'
-      })
+      body: JSON.stringify({ message: userMessage, clientId: 'cairns-poolpros' })
     });
 
     const data = await res.json();
@@ -125,10 +122,7 @@ async function sendMessage(text) {
     const res = await fetch(`${apiBase}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: text,
-        clientId: 'cairns-poolpros'
-      })
+      body: JSON.stringify({ message: text, clientId: 'cairns-poolpros' })
     });
 
     const data = await res.json();
