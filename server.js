@@ -1,46 +1,51 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const path = require('path');
 const cors = require('cors');
-const { processMessage } = require('./openai');
-const { sendCustomerEmail, sendServiceEmail } = require('./email');
+const fileUpload = require('express-fileupload');
+const dotenv = require('dotenv');
+const path = require('path');
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(fileUpload());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 🔧 Add API route
+// Routes
 app.post('/api/message', async (req, res) => {
   try {
-    const { message, name, email, phone, imageUrls, address, accessInfo } = req.body;
+    const message = req.body.message || '';
+    const image = req.files?.image;
 
-    const botResponse = await processMessage(message);
+    // Simulate logic: echo message and image
+    const response = {
+      reply: `Received: ${message}`,
+      imageUrl: image ? `/uploads/${image.name}` : null,
+    };
 
-    // Send email to service team
-    await sendServiceEmail({ message, name, email, phone, imageUrls, address, accessInfo });
-
-    // Send confirmation to customer
-    if (email) {
-      await sendCustomerEmail({ message, name, email, phone, imageUrls });
+    if (image) {
+      const uploadPath = path.join(__dirname, 'public', 'uploads', image.name);
+      await image.mv(uploadPath);
     }
 
-    res.status(200).json({ reply: botResponse });
+    return res.json(response);
   } catch (err) {
-    console.error('Error in /api/message:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error('POST /api/message error:', err.message);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Fallback: serve index.html
+// Serve frontend
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });
