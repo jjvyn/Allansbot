@@ -4,7 +4,8 @@ const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
 const uploadInput = document.getElementById('upload-input');
 
-const BASE_URL = 'https://allansbot.onrender.com'; // ✅ Use absolute URL
+// Use absolute API path with correct endpoint
+const BASE_URL = 'https://allansbot.onrender.com';
 
 function appendMessage(sender, text) {
   const messageElement = document.createElement('div');
@@ -22,13 +23,17 @@ async function sendMessage() {
   messageInput.value = '';
 
   try {
-    const response = await fetch(`${BASE_URL}/api/message`, {
+    const response = await fetch(`${BASE_URL}/message`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ message }),
     });
+
+    if (!response.ok) {
+      throw new Error(`Server responded with ${response.status}`);
+    }
 
     const data = await response.json();
     appendMessage('bot', data.reply || 'Sorry, I didn’t understand that.');
